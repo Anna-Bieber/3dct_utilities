@@ -3,6 +3,8 @@
 """
 Created on Thu Jun 10 10:38:08 2021
 
+Extract points from a 3DCT results txt file and save them for reloading into 3DCT or into FIJI.
+
 @author: anbieber
 """
 import numpy as np
