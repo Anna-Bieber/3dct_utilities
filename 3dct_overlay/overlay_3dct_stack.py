@@ -15,8 +15,9 @@ from overlay_IMOD_functions_v1 import plot_overlay_IMOD, save_composite_tif_from
 #%% INPUT
 
 # Paths to directories with files. Directory with fluorescence stacks can be set as different path
-in_dir = Path('./test_data')
+in_dir = Path('./test_data/')
 fluo_dir = in_dir
+
 
 # File names
 fname_target = 'FOV8_IB_before.tif' # Target image (usually ion beam / SEM / TEM image). Should be in in_dir.

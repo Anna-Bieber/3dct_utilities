@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 Created on Thu May  7 18:15:06 2020
+Changelog
 
+2023/02: Fix to make functions work for 16bit fluorescence images. 
+        Main changes in plot_overlay_IMOD and make_overlay_data_multifluo
 @author: Anna
 """
 import numpy as np
@@ -28,7 +31,7 @@ def cmap_fading(base_color):
         c = [val/255 for val in base_color] # adjust range
     else:
         c = list(base_color)
-    colors = np.zeros((1000, 4), np.float64)
+    colors = np.zeros((100000, 4), np.float64)
     for i, val in enumerate(c):
         colors[:,i] = val # set RGB to base color
     colors[:,3] = np.linspace(0, 1, colors.shape[0]) # make alpha gradient
@@ -38,18 +41,24 @@ def cmap_fading(base_color):
     
     return cmap
 
-def lut_imagej(base_color):
+def lut_imagej(base_color, dtype=np.uint8):
     """Create a look-up table for saving files for ImageJ. base_color is given as 
-    [r,g,b] with values ranging from 0 to 1."""
+    [r,g,b] with values ranging from 0 to 1. Changelog 2023/02: account for dtype. However,
+    in practice it doesn't seem to matter if a 256-color LUT is given to uint16 data."""
     # scale base color to 1. base color should be (1,1,1) for gray LUT!
     if np.max(base_color) > 1:
         c = [val/255 for val in base_color] # adjust range
     else:
         c = list(base_color) 
     # Intensity value range
-    val_range = np.arange(256, dtype=np.uint8)
+    if dtype==np.uint8:
+        max_val = 255
+    else:
+        max_val = 65535
+    
+    val_range = np.arange(max_val+1, dtype=dtype)
     # set up LUT
-    lut = np.zeros((3, 256), dtype=np.uint8)
+    lut = np.zeros((3, max_val+1), dtype=dtype)
     for i, val in enumerate(c): # go through RGB
         lut[i,:] = val*val_range
     
@@ -168,6 +177,7 @@ def make_overlay_after_rotatevol(ib_tif, cf_orig_tif, cf_data_rot,
     # get size of orig cf data
     with tf.TiffFile(cf_orig_tif) as tif:
         cf_orig_size = tif.asarray().shape
+        cf_orig_dtype = tif.pages[0].dtype
     
     # Make MIP of rotatevol data
     cf_rot_MIP = cf_data_rot.max(axis=0)
@@ -225,9 +235,9 @@ def make_overlay_after_rotatevol(ib_tif, cf_orig_tif, cf_data_rot,
         I_ymax = I_ymin + MIP_large.shape[0]
 
     MIP_large[L_ymin:L_ymax, L_xmin:L_xmax] = MIP_interpol_transformed[I_ymin:I_ymax, I_xmin:I_xmax]
-    # Convert fluo to uint8
-    if MIP_large.dtype != np.uint8:
-        MIP_large = MIP_large.astype(np.uint8)
+    # Convert fluo to same dtype as orig
+    if MIP_large.dtype != cf_orig_dtype:
+        MIP_large = MIP_large.astype(cf_orig_dtype)
     # Create composite array
     composite_data = np.array([ib_data, MIP_large])
     
@@ -274,6 +284,7 @@ def make_overlay_data_multifluo(ib_tif, cf_orig_tif, list_cf_data_rot,
     # get size of orig cf data
     with tf.TiffFile(cf_orig_tif) as tif:
         cf_orig_size = tif.asarray().shape
+        cf_orig_dtype = tif.pages[0].dtype
     # Use first fluo image to determine parameters
     cf_data_rot = list_cf_data_rot[0]
     # Make MIP of rotatevol data
@@ -341,9 +352,10 @@ def make_overlay_data_multifluo(ib_tif, cf_orig_tif, list_cf_data_rot,
             I_ymax = I_ymin + MIP_large.shape[0]
     
         MIP_large[L_ymin:L_ymax, L_xmin:L_xmax] = MIP_interpol_transformed[I_ymin:I_ymax, I_xmin:I_xmax]
-        # Convert fluo to uint8
-        if MIP_large.dtype != np.uint8:
-            MIP_large = MIP_large.astype(np.uint8)
+
+        # Convert fluo to same dtype as original
+        if MIP_large.dtype != cf_orig_dtype:
+            MIP_large = MIP_large.astype(cf_orig_dtype)
         # Create composite array
         composite_data = np.concatenate([ composite_data, np.array([MIP_large]) ], axis=0)
     
@@ -466,7 +478,18 @@ def plot_overlay_IMOD(fname_corr_txt, fname_target, fluo_file_list, list_colors=
         # Load mrc output of rotatevol
         print("Loading channel {} after rotation".format(i))
         with mrcfile.mmap(fname_rot_mrc) as mrc: # mmap might be faster than open
-            list_fluo_rot.append( (mrc.data[:] + 128).astype(np.uint8) ) # directly convert to uint8
+            mrc_data = mrc.data
+        
+        # Rotatevol makes 8bit files into int8, but leaves intensities of 16 bit files
+        if mrc_data.dtype == 'int8':
+            mrc_data = (mrc_data + 128).astype(np.uint8)
+        else:
+            # Otherwise, simply make rotated data same dtype as input
+            with tf.TiffFile(fname_fluo) as tif:
+                dtype_fluo = tif.pages[0].dtype
+            mrc_data = mrc_data.astype(dtype_fluo)
+                
+        list_fluo_rot.append( mrc_data ) # directly convert to uint8
     # Generate overlay data
     print("Making overlay data")
     composite_data = make_overlay_data_multifluo(fname_target, 
@@ -479,7 +502,7 @@ def plot_overlay_IMOD(fname_corr_txt, fname_target, fluo_file_list, list_colors=
     im = ax.imshow(composite_data[0], cmap='Greys_r', origin='upper')
     ax.set_xlim(ax.get_xlim()) # fix x,y lim
     ax.set_ylim(ax.get_ylim())   
-    
+
     im_list = [im]
     for i, (data, color) in enumerate(zip(composite_data[1:], list_colors)):
         print("Plotting fluo channel {}".format(i))
