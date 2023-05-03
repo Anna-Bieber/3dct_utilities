@@ -10,12 +10,12 @@ uses IMOD to perform stack rotation
 """
 
 from pathlib import Path
-from overlay_IMOD_functions_v1 import plot_overlay_IMOD, save_composite_tif_fromarray
+from overlay_IMOD_functions_v2 import plot_overlay_IMOD, save_composite_tif_fromarray
 
 #%% INPUT
 
 # Paths to directories with files. Directory with fluorescence stacks can be set as different path
-in_dir = Path('./test_data/')
+in_dir = Path('/fs/pool/pool-ccab/Cristina/Yeast_autophagy/Titan/Correlation_examples/AP_20200204_EA006_5_tomo_007/IB_overlay_new/')#Path('./test_data/')
 fluo_dir = in_dir
 
 
@@ -24,8 +24,8 @@ fname_target = 'FOV8_IB_before.tif' # Target image (usually ion beam / SEM / TEM
 fname_correlation_txt = '2020-01-16_15-29-23_correlation.txt' # Correlation txt output. Should be in in_dir.
 # List of fluo file names. Should be resliced images as used for 3dct. Should be in fluo_dir.
 list_fnames_fluo = ['20200113_EA006_5_FOV8_7_cmle_ch00_resliced.tif'] 
-
 list_fluo_colors = [(1,0,1)] # List of fluo colors, given as (r,g,b) tuples.
+
 
 # Output filename
 fname_overlay = fname_target.replace('.tif', '_overlay.tif')
